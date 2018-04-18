@@ -1,0 +1,89 @@
+---
+- name: register region
+  command: echo {{alicloud_region}}
+  register: region
+
+- name: download cf cli and unarchive from oss
+  unarchive:
+    src: 'http://cloudfoundry-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/cloudfoundry/cli/cf-cli_6.33.0_linux_x86-64.tgz'
+    dest: '/usr/local/bin/'
+    remote_src: yes
+  when: "'cn-' in region.stdout and 'cn-hongkong' not in region.stdout"
+
+- name: download cf cli and unarchive from pivitol
+  unarchive:
+    src: 'https://cli.run.pivotal.io/stable?release=linux64-binary&source=github'
+    dest: '/usr/local/bin/'
+    remote_src: yes
+  when: "'cn-hongkong' in region.stdout or 'cn-' not in region.stdout"
+
+- name: write completion of cf
+  get_url:
+    url: 'https://raw.githubusercontent.com/cloudfoundry/cli/master/ci/installers/completion/cf'
+    dest: /usr/share/bash-completion/completions/
+  become-method: sudo
+
+- name: make dir
+  file: path="{{ cf_deploy_dir }}" state=directory
+
+- name: copy releases for China
+  copy:
+    src: releases
+    dest: '{{ cf_deploy_dir }}'
+  when: "'cn-' in region.stdout and 'cn-hongkong' not in region.stdout"
+
+- name: git clone cf deployment
+  git:
+    repo: 'https://github.com/rickymax/aliyun-cf-deployment.git'
+    dest: '{{ cf_deploy_dir }}/cf-deployment'
+
+- name: update config
+  shell: '{{ item }}'
+  args:
+    chdir: '{{ cf_deploy_dir }}'
+  with_items:
+    - echo bosh -e {{director_name}} update-cloud-config ./cf-deployment/iaas-support/alicloud/cloud-config.yml -v az1_zone={{az1_zone}} -v az2_zone={{az2_zone}} -v az3_zone={{az3_zone}} -v az1_vswitch_id={{az1_vswitch_id}} -v az1_vswitch_id_2={{az1_vswitch_id_2}} -v az1_vswitch_id_3={{az1_vswitch_id_3}} -v az2_vswitch_id={{az2_vswitch_id}} -v az2_vswitch_id_2={{az2_vswitch_id_2}}  -v az2_vswitch_id_3={{az2_vswitch_id_3}} -v az3_vswitch_id={{az3_vswitch_id}} -v az3_vswitch_id_2={{az3_vswitch_id_2}} -v az3_vswitch_id_3={{az3_vswitch_id_3}} -v az1_vswitch_range={{az1_vswitch_range}} -v az1_vswitch_range_2={{az1_vswitch_range_2}} -v az1_vswitch_range_3={{az1_vswitch_range_3}} -v az2_vswitch_range={{az2_vswitch_range}} -v az2_vswitch_range_2={{az2_vswitch_range_2}} -v az2_vswitch_range_3={{az2_vswitch_range_3}} -v az3_vswitch_range={{az3_vswitch_range}} -v az3_vswitch_range_2={{az3_vswitch_range_2}} -v az3_vswitch_range_3={{az3_vswitch_range_3}} -v az1_vswitch_gateway={{az1_vswitch_gateway}} -v az1_vswitch_gateway_2={{az1_vswitch_gateway_2}} -v az1_vswitch_gateway_3={{az1_vswitch_gateway_3}} -v az2_vswitch_gateway={{az2_vswitch_gateway}} -v az2_vswitch_gateway_2={{az2_vswitch_gateway_2}} -v az2_vswitch_gateway_3={{az2_vswitch_gateway_3}} -v az3_vswitch_gateway={{az3_vswitch_gateway}} -v az3_vswitch_gateway_2={{az3_vswitch_gateway_2}} -v az3_vswitch_gateway_3={{az3_vswitch_gateway_3}} -v security_group_id_1={{security_group_id_1}} -v security_group_id_2={{security_group_id_2}} -v security_group_id_3={{security_group_id_3}} -v tcp_slb_id_array=[{{tcp_slb_id_array}}] -v http_slb_id_array=[{{http_slb_id_array}}] -v diego_slb_id_array=[{{diego_slb_id_array}}] -v rabbitmq_slb_id_array=[{{rabbitmq_slb_id_array}}] \<\< EOF > update_config.sh
+    - echo y >> update_config.sh
+    - echo EOF >> update_config.sh
+    - chmod +x update_config.sh
+    - ./update_config.sh
+    - echo export CF_DOMAIN={{system_domain}} >> /etc/profile
+    - . /etc/profile
+
+- name: uploade releases and stemcells, write cf manifest in china
+  shell: '{{ item }}'
+  args:
+    chdir: '{{cf_deploy_dir}}'
+  when: "'cn-' in region.stdout and 'cn-hongkong' not in region.stdout"
+  with_items:
+    - bosh -e {{director_name}} upload-stemcell http://bosh.oss-cn-hangzhou.aliyuncs.com/light-bosh-stemcell-{{stemcell_version}}-alicloud-kvm-ubuntu-trusty-go_agent.tgz
+    - cf-deployment/iaas-support/alicloud/upload-releases.sh ./releases {{director_name}}
+    - echo bosh -e {{director_name}} -d cf deploy ./cf-deployment/cf-deployment.yml --vars-store cf-vars.yml -o cf-deployment/iaas-support/alicloud/stemcells.yml -v region={{alicloud_region}} -v system_domain={{system_domain}} \<\< EOF > deploy_cf.sh
+
+- name: uploade releases and stemcells, write cf manifest in oversea
+  shell: '{{ item }}'
+  args:
+    chdir: '{{cf_deploy_dir}}'
+  when: "'cn-hongkong' in region.stdout or 'cn-' not in region.stdout"
+  with_items:
+    - bosh -e {{director_name}} upload-stemcell http://bosh-{{alicloud_region}}.oss-{{alicloud_region}}.aliyuncs.com/light-bosh-stemcell-{{stemcell_version}}-alicloud-kvm-ubuntu-trusty-go_agent.tgz
+    - bosh -e {{director_name}} upload-release https://bosh.io/d/github.com/cloudfoundry/cf-release?v={{cf_release_version}}
+    - echo bosh -e {{director_name}} -d cf deploy cf-deployment/cf-deployment.yml --vars-store cf-vars.yml -o cf-deployment/iaas-support/alicloud/stemcells.yml -v region={{alicloud_region}} -v system_domain={{system_domain}} \<\< EOF > deploy_cf.sh
+
+- name: write cf manifest
+  shell: '{{ item }}'
+  args:
+    chdir: '{{cf_deploy_dir}}'
+  with_items:
+    - echo yes >> deploy_cf.sh
+    - echo EOF >> deploy_cf.sh
+
+- name: mode 755
+  file:
+    path: '{{cf_deploy_dir}}/deploy_cf.sh'
+    mode: 0755
+
+- name: deploy cf
+  shell: './deploy_cf.sh'
+  args:
+    chdir: '{{cf_deploy_dir}}'

@@ -1,0 +1,55 @@
+---
+- name: create password
+  shell: bosh int ./cf-vars.yml --path /cf_admin_password > password
+  args:
+    chdir: '{{ cf_deploy_dir }}'
+
+- name: register password
+  command: awk 'NR==1{print}' password
+  args:
+    chdir: '{{ cf_deploy_dir }}'
+  register: secret_key
+
+- name: login cf
+  command: cf login -a http://api.{{system_domain}} --skip-ssl-validation -u admin -p {{secret_key.stdout}}
+  args:
+      chdir: '{{ cf_deploy_dir }}'
+
+- name: register region
+  command: echo {{alicloud_region}}
+  register: region
+
+- name: update buildpacks
+  shell: '{{ item }}'
+  when: "'cn-' in region.stdout and 'cn-hongkong' not in region.stdout"
+  with_items:
+    - cf update-buildpack staticfile_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/staticfile_buildpack-cached-v1.4.26%2B1523288462.zip -i 1
+    - cf update-buildpack java_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/java-buildpack-offline-v4.9.zip -i 2
+    - cf update-buildpack ruby_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/ruby_buildpack-cached-v1.7.15%2B1520610971.zip -i 3
+    - cf update-buildpack dotnet_core_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/dotnet-core_buildpack-cached-v2.0.5%2B1521557876.zip -i 4
+    - cf update-buildpack nodejs_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/nodejs_buildpack-cached-v1.6.19%2B1519681797.zip -i 5
+    - cf update-buildpack go_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/go_buildpack-cached-v1.8.20%2B1520610537.zip -i 6
+    - cf update-buildpack python_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/python_buildpack-cached-v1.6.9%2B1518527532.zip -i 7
+    - cf update-buildpack php_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/php_buildpack-cached-v4.3.51%2B1520610183.zip -i 8
+    - cf update-buildpack binary_buildpack -p https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/binary_buildpack-cached-v1.0.18%2B1521578949.zip -i 9
+    - cf create-buildpack nodejs_buildpack_1607 https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/nodejs_buildpack-cached-v1.6.7.zip 10 --enable
+    - cf create-buildpack java_buildpack_offline https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/java-buildpack-offline-v4.9-20180316.zip 11 --enable
+    - cf create-buildpack ManagementPortal https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/staticfile_buildpack-cached-v1.3.16.zip 12 --enable
+    - cf create-buildpack apache_tomcat_buildpack https://wise-paas.oss-cn-beijing.aliyuncs.com/buildpack/java-buildpack-offline-v4.6-20171103.zip 13 --enable
+
+- name: download application and unarchive
+  unarchive:
+    src: 'https://wordpress.org/latest.zip'
+    dest: '{{ download_dir }}'
+    remote_src: yes
+
+- name: install app
+  shell: '{{ item }}'
+  args:
+    chdir: '{{ download_dir }}/wordpress'
+  with_items:
+    - cf orgs
+    - cf create-space wordpress -o system
+    - cf target -o "system" -s "wordpress"
+    - cf spaces
+    - cf push wordpress -b php_buildpack

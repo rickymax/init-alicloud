@@ -1,0 +1,47 @@
+---
+- name: register region
+  command: echo {{alicloud_region}}
+  register: region
+
+- name: download bosh cli from oss
+  get_url:
+    url: 'http://bosh.oss-cn-hangzhou.aliyuncs.com/cli/bosh-cli-2.0.45-linux-amd64'
+    dest: /usr/local/bin/bosh
+    mode: 0755
+  when: "'cn-' in region.stdout and 'cn-hongkong' not in region.stdout"
+
+- name: download bosh cli
+  get_url:
+    url: 'https://s3.amazonaws.com/bosh-cli-artifacts/bosh-cli-2.0.45-linux-amd64'
+    dest: /usr/local/bin/bosh
+    mode: 0755
+  when: "'cn-hongkong' in region.stdout or 'cn-' not in region.stdout"
+
+- name: execute bosh
+  command: bosh -v
+
+- name: upgrade apt
+  apt: upgrade=dist
+
+- name: install bosh depends on
+  apt: name={{ item }}
+  with_items:
+    - build-essential
+    - zlibc
+    - zlib1g-dev
+    - ruby
+    - ruby-dev
+    - openssl
+    - libxslt-dev
+    - libxml2-dev
+    - libssl-dev
+    - libreadline6
+    - libreadline6-dev
+    - libyaml-dev
+    - libsqlite3-dev
+    - libpq-dev
+    - libmysqlclient-dev
+    - sqlite3
+    - expect
+    - tcl
+    - git

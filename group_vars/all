@@ -1,0 +1,14 @@
+director_name: my-bosh
+
+cf_release_version: 279
+
+delete: false
+download_dir: /root/downloads
+bosh_deploy_dir: /root/bosh-deploy
+cf_deploy_dir: /root/cf-release-{{cf_release_version}}
+dns_recursor_ip: 8.8.8.8
+
+releases_dir: /root/releases
+
+stemcell_version: 1017
+
