@@ -34,7 +34,7 @@
 
 - name: git clone cf deployment
   git:
-    repo: 'https://github.com/rickymax/aliyun-cf-deployment.git'
+    repo: 'https://github.com/rickymax/cf-deployment.git'
     dest: '{{ cf_deploy_dir }}/cf-deployment'
 
 - name: update config

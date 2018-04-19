@@ -11,7 +11,7 @@
 
 - name: git clone bosh deployment
   git:
-    repo: 'https://github.com/rickymax/aliyun-bosh-deployment.git'
+    repo: 'https://github.com/rickymax/bosh-deployment.git'
     dest: '{{ bosh_deploy_dir }}/bosh-deployment'
 
 - name: cp private key
