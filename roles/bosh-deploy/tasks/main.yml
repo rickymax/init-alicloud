@@ -92,4 +92,4 @@
     chdir: '{{ bosh_deploy_dir }}'
     executable: /bin/bash
   with_items:
-    - bosh -e my-bosh -n update-runtime-config bosh-deployment/runtime.yml
+    - bosh -e my-bosh -n update-runtime-config bosh-deployment/runtime-configs/node-exporter.yml
